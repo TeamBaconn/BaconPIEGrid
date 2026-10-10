@@ -3,34 +3,26 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "BaconPIEGridLayout.h"
 #include "Layout/Margin.h"
 #include "Layout/SlateRect.h"
 
 class FBaconPIEGridSwitcher;
 class FBaconPIEGridUndockedTarget;
+class FWeakWidgetPath;
+class FWidgetPath;
 class IAssetViewport;
 class SBaconPIEGridCell;
+class SBaconPIEGridPanel;
 class SSplitter;
-class SUniformGridPanel;
 class SViewport;
 class SWidget;
 class SWindow;
+struct FFocusEvent;
 struct FGeometry;
 struct FRequestPlaySessionParams;
+enum class EBaconPIEGridViewMode : uint8;
 enum EPlayNetMode : int;
-
-/** Cell arrangement shared by the docked grid, the shrunk level viewport and every client window, so they all line up. */
-struct FBaconPIEGridLayout
-{
-	/** InGridSize and InAspectRatio only matter for auto columns with a locked ratio. An aspect ratio of 0 means unlocked. */
-	static FBaconPIEGridLayout Make(int32 InNumCells, int32 InPreferredColumns, const FVector2f& InGridSize, float InAspectRatio);
-
-	/** Same arrangement as SUniformGridPanel with InPadding as its slot padding. */
-	FSlateRect GetCellArea(int32 InCellIndex, const FSlateRect& InGridArea, float InPadding) const;
-
-	int32 Columns = 1;
-	int32 Rows = 1;
-};
 
 /** A level editor split resized to make room for the grid, and the size coefficient to put back when play stops. */
 struct FBaconPIEGridPushedSplit
@@ -77,11 +69,12 @@ public:
 	/** Fills OutWindowArguments with the -WinX/-WinY/-ResX/-ResY that put the process window on its cell. */
 	bool AddProcessClient(int32 InPIEInstanceIndex, EPlayNetMode InNetMode, FString& OutWindowArguments);
 
+	/** Makes the first docked client the game viewport again, unless the user has already switched away from it. */
 	void FocusFirstClient() const;
 	void End();
 
 private:
-	explicit FBaconPIEGridSession(int32 InNumCells);
+	FBaconPIEGridSession(int32 InNumCells, EBaconPIEGridViewMode InViewMode);
 
 	/** InSizeRatio is the share of InGeometry's width and height the grid covers, anchored at its top-left. */
 	void CaptureGridArea(const FGeometry& InGeometry, const FVector2f& InSizeRatio);
@@ -96,25 +89,35 @@ private:
 	void RestoreHostViewport();
 	FMargin GetHostViewportPadding() const;
 
+	/** Brings the picked client into the carousel's main view. */
+	void HandleCellSwitchedTo(int32 InCellIndex);
+
+	/**
+	 * Until the user switches to another client, focus the other clients' game code takes (such as setting the input mode as
+	 * each client spawns) goes back to the first client.
+	 */
+	void HandleFocusChanging(const FFocusEvent& InFocusEvent, const FWeakWidgetPath& InOldFocusPath, const TSharedPtr<SWidget>& InOldFocusedWidget, const FWidgetPath& InNewFocusPath, const TSharedPtr<SWidget>& InNewFocusedWidget);
+	void HandleDockedPostTick(float InDeltaTime);
 	void HandlePostTick(float InDeltaTime);
 	void PlaceWindow(FBaconPIEGridTiledWindow& InTiledWindow);
 	bool HasGridArea() const;
 	void UpdateLayout();
 	void BuildGrid();
-	void RebuildGrid();
 	void SetCellContent(int32 InCellIndex, const TSharedRef<SWidget>& InContent);
 	void EnsureCellCount(int32 InNumCells);
 	int32 FindFreeCellIndex() const;
 
 private:
+	EBaconPIEGridViewMode ViewMode;
 	FBaconPIEGridLayout Layout;
 	int32 PreferredColumns = 0;
+	float CarouselHeightRatio = 0.f;
+	int32 MainCellIndex = 0;
 	float CellPadding = 0.f;
 
 	/** Width / height every client is letterboxed to. 0 lets clients fill their cells. */
 	float AspectRatio = 0.f;
 	bool bShowCellLabels = true;
-	bool bTileProcessWindows = true;
 
 	/** Desktop pixels, from the docking area's last layout when the session started, or every frame while following the host viewport. */
 	FSlateRect GridArea;
@@ -126,12 +129,20 @@ private:
 	TWeakPtr<SWindow> OverlayWindow;
 	TArray<FBaconPIEGridPushedSplit> PushedSplits;
 	TSharedPtr<SWidget> GridRoot;
-	TSharedPtr<SUniformGridPanel> GridPanel;
+	TSharedPtr<SBaconPIEGridPanel> GridPanel;
 
 	/** Indexed by cell. Null until that cell's client arrives. */
 	TArray<TSharedPtr<SWidget>> CellContents;
 	TArray<TSharedPtr<SBaconPIEGridCell>> DockedCells;
 	TSharedPtr<FBaconPIEGridSwitcher> Switcher;
+
+	/** Cleared once the user switches to another client. */
+	bool bHoldFirstClientFocus = true;
+	bool bRefocusFirstClient = false;
+	FDelegateHandle FocusChangingHandle;
+
+	/** Docked sessions refocus the first client in it; tiled ones move their windows. */
+	FDelegateHandle PostTickHandle;
 
 	// === TILING ===
 
@@ -141,5 +152,4 @@ private:
 	/** The level viewport shrunk to the first cell, and its content padding to put back when play stops. */
 	TWeakPtr<SWidget> ShrunkViewport;
 	FMargin OriginalViewportPadding;
-	FDelegateHandle PostTickHandle;
 };

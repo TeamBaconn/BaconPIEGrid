@@ -5,6 +5,7 @@
 #include "Brushes/SlateRoundedBoxBrush.h"
 #include "Framework/Application/SlateApplication.h"
 #include "IAssetViewport.h"
+#include "Layout/WidgetPath.h"
 #include "Widgets/Images/SImage.h"
 #include "Widgets/SViewport.h"
 #include "Widgets/SWindow.h"
@@ -21,7 +22,13 @@ void IBaconPIEGridSwitchTarget::FocusGameViewport(const TSharedRef<SViewport>& I
 
 	// Release the previous client's capture and lock first, otherwise the cursor can't leave it.
 	SlateApplication.ResetToDefaultPointerInputSettings();
-	SlateApplication.SetCursorPos(InViewportWidget->GetTickSpaceGeometry().GetAbsolutePositionAtCoordinates(FVector2D(0.5, 0.5)));
+
+	// A fresh path instead of the cached geometry, which is a frame behind when the carousel has just moved the client.
+	FWidgetPath ViewportPath;
+	if (SlateApplication.GeneratePathToWidgetUnchecked(InViewportWidget, ViewportPath))
+	{
+		SlateApplication.SetCursorPos(ViewportPath.Widgets.Last().Geometry.GetAbsolutePositionAtCoordinates(FVector2D(0.5, 0.5)));
+	}
 
 	// In the editor a PIE viewport only captures the mouse when focus arrives by mouse (FSceneViewport::OnFocusReceived).
 	// That makes this act like a click into the client without the click reaching the game; the client's input mode still decides.

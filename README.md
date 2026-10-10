@@ -1,15 +1,28 @@
 # Bacon PIE Grid
 
-Unreal Engine editor plugin that docks multiplayer PIE clients into a grid over the play viewport. Clients that open in their own windows are tiled onto the same grid, and you can switch between clients with Ctrl+Tab.
+Unreal Engine editor plugin that docks multiplayer PIE clients over the play viewport, either as an even grid or as a carousel with one main view and smaller views below it. Clients that open in their own windows are tiled onto the same grid, and you can switch between clients with Ctrl+Tab.
+
+## Preview
+
+**Grid view:** every client gets an equal cell.
+
+![Grid view](Docs/grid.gif)
+
+**Carousel view:** one client fills the main view, and Ctrl+Tab brings the next one in.
+
+![Carousel view](Docs/carousel.gif)
 
 ## Features
 
-- Docks in-process PIE clients into a grid over the play viewport when you play in "Selected Viewport" with more than one client.
-- Tiles client windows onto the same grid cells: separate-process clients (Run Under One Process off), Standalone Game, and PIE clients that aren't docked.
-- Picks a near-square layout automatically, or uses a fixed number of columns.
+- Docks in-process PIE clients over the play viewport when you play in "Selected Viewport" with more than one client.
+- Two view modes for docked clients:
+  - Grid: an even grid that picks a near-square layout automatically, or uses a fixed number of columns.
+  - Carousel: the first client fills a main view, and the others play in a row of smaller views below it, each the same shape as the main view.
+- Tiles client windows onto the grid cells: separate-process clients (Run Under One Process off), Standalone Game, and PIE clients that aren't docked.
 - Can letterbox every client to a fixed aspect ratio, such as 16 : 9.
 - Can size the grid against the level editor's panel area instead of the play viewport. The editor layout is put back when play stops.
-- Client switcher: hold Ctrl and tap Tab to move the highlight, then release Ctrl to switch. Shift goes backwards and Escape cancels.
+- Client switcher: hold Ctrl and tap Tab to move the highlight, then release Ctrl to switch. Shift goes backwards and Escape cancels. In the carousel, the client you switch to moves into the main view.
+- Docked play starts with focus on the first client, usually the server. It keeps focus until you switch to another client, even when the other clients' game code takes focus as they spawn.
 
 ## Requirements
 
@@ -21,23 +34,17 @@ It's an editor-only module, so nothing ends up in packaged builds. Developed on 
 ## Installation
 
 1. Clone or copy this repository into your project as `Plugins/BaconPIEGrid`.
-2. Add the plugin's editor engine to `Config/DefaultEngine.ini`:
+2. Regenerate project files and build the editor.
 
-   ```ini
-   [/Script/Engine.Engine]
-   UnrealEdEngine=/Script/BaconPIEGrid.BaconPIEGridEditorEngine
-   ```
-
-3. Regenerate project files and build the editor.
-
-The plugin hooks into PIE through this editor engine class, so it can't be combined with another plugin or project that sets its own `UnrealEdEngine`.
+The plugin hooks into PIE through its own editor engine class. Its `Config/Engine.ini` sets `UnrealEdEngine` while the plugin is enabled, so there's nothing to add to your project's config, and disabling the plugin puts the default editor engine back. Only one editor engine class can be active, so it can't be combined with another plugin or project that sets its own `UnrealEdEngine`.
 
 ## Usage
 
 1. In the play options next to the Play button, set Multiplayer Options > Number of Players to 2 or more.
-2. Play in "Selected Viewport". The clients dock into a grid over the play viewport.
-3. With Run Under One Process off, or with Standalone Game, the client windows are placed on the grid cells instead.
-4. While one of the clients has focus, press Ctrl+Tab to switch between them.
+2. Pick Grid or Carousel under Editor Preferences > Level Editor > PIE Grid > View Mode.
+3. Play in "Selected Viewport". The clients dock over the play viewport.
+4. With Run Under One Process off, or with Standalone Game, the client windows are placed on the grid cells instead.
+5. While one of the clients has focus, press Ctrl+Tab to switch between them.
 
 ## Settings
 
@@ -45,10 +52,11 @@ Editor Preferences > Level Editor > PIE Grid. Settings are saved per user.
 
 | Setting | Default | What it does |
 |---|---|---|
-| Dock Clients | On | Docks in-process clients into the grid. Applies to "Selected Viewport" play with more than one client. |
+| Dock Clients | On | Docks in-process clients over the play viewport. Applies to "Selected Viewport" play with more than one client. With it off, the first client stays in the level viewport, shrunk to the first cell, and the other client windows follow the viewport as it moves or resizes. Client windows that aren't docked are always placed on the grid cells. |
+| View Mode | Grid | How docked clients are laid out: Grid or Carousel. Client windows that aren't docked always use the grid. |
+| Carousel Height Ratio | 0.25 | Carousel only. Share of the grid's height taken by the row of smaller views below the main view. |
 | Play Screen Size Ratio | Off, 1 : 1 | When ticked, sizes the grid against this width : height share of the level editor's panel area instead of the play viewport. Below 1, the panels next to the play viewport are pushed aside to make room. 1 : 1 covers the whole panel area, with the panels and drawers hidden behind the grid. |
-| Tile Process Windows | On | Places client windows that aren't docked on the grid cells. With Dock Clients off, the first client stays in the level viewport, shrunk to the first cell, and the other windows follow the viewport as it moves or resizes. |
-| Columns | 0 | Number of grid columns. 0 picks the layout automatically. |
+| Columns | 0 | Number of grid columns. 0 picks the layout automatically. The carousel doesn't use it. |
 | Cell Padding | 2 | Space around each cell. |
 | Client Aspect Ratio | Off, 16 : 9 | When ticked, letterboxes every client to this width : height inside its cell. Separate-process windows get the same shape. |
 | Show Cell Labels | On | Labels each cell with its client, such as "Server 0" or "Client 1". |

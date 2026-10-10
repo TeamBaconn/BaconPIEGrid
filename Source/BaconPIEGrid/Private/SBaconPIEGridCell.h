@@ -29,9 +29,15 @@ public:
 
 		/** Width / height to letterbox the client to. 0 fills the cell. */
 		SLATE_ARGUMENT(float, AspectRatio)
+
+		/** Called when the client switcher picks this client, before the client takes focus. */
+		SLATE_EVENT(FSimpleDelegate, OnSwitchedTo)
 	SLATE_END_ARGS()
 
 	void Construct(const FArguments& InArgs, const TSharedRef<IAssetViewport>& InHostViewport);
+
+	/** Focuses the client as a click would. Unlike FocusClient, it doesn't count as a switch, so the carousel stays put. */
+	void FocusViewport();
 
 	//~ IBaconPIEGridSwitchTarget
 	virtual bool HasFocusedClient() const override;
@@ -65,6 +71,10 @@ public:
 	virtual bool IsImmersive() const override { return false; }
 	virtual void ToggleGameView() override {}
 	virtual bool IsInGameView() const override { return false; }
+
+private:
+	// === EVENTS ===
+	FSimpleDelegate OnSwitchedTo;
 
 private:
 	TWeakPtr<IAssetViewport> HostViewport;

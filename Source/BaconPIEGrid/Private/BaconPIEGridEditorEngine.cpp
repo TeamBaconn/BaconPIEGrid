@@ -68,13 +68,7 @@ void UBaconPIEGridEditorEngine::StartPlayInEditorSession(FRequestPlaySessionPara
 {
 	// A start that failed part way may never have reached EndPlayMap.
 	EndGridSession();
-
 	Super::StartPlayInEditorSession(InRequestParams);
-
-	if (GridSession.IsValid())
-	{
-		GridSession->FocusFirstClient();
-	}
 }
 
 void UBaconPIEGridEditorEngine::StartPlayInNewProcessSession(FRequestPlaySessionParams& InRequestParams)
@@ -125,6 +119,17 @@ UGameInstance* UBaconPIEGridEditorEngine::CreateInnerProcessPIEGameInstance(FReq
 	}
 
 	return GameInstance;
+}
+
+void UBaconPIEGridEditorEngine::OnAllPIEInstancesStarted()
+{
+	Super::OnAllPIEInstancesStarted();
+
+	// The engine just made the last client the game viewport so its PIE window stays in front. Docked clients start on the first one.
+	if (GridSession.IsValid())
+	{
+		GridSession->FocusFirstClient();
+	}
 }
 
 void UBaconPIEGridEditorEngine::EndGridSession()

@@ -24,6 +24,7 @@
 void SBaconPIEGridCell::Construct(const FArguments& InArgs, const TSharedRef<IAssetViewport>& InHostViewport)
 {
 	HostViewport = InHostViewport;
+	OnSwitchedTo = InArgs._OnSwitchedTo;
 
 	static const IConsoleVariable* PropagateAlphaVariable = IConsoleManager::Get().FindConsoleVariable(TEXT("r.PostProcessing.PropagateAlpha"));
 
@@ -88,6 +89,14 @@ void SBaconPIEGridCell::Construct(const FArguments& InArgs, const TSharedRef<IAs
 	];
 }
 
+void SBaconPIEGridCell::FocusViewport()
+{
+	if (SceneViewport.IsValid() && !HasFocusedDescendants())
+	{
+		FocusGameViewport(ViewportWidget.ToSharedRef());
+	}
+}
+
 bool SBaconPIEGridCell::HasFocusedClient() const
 {
 	return HasFocusedDescendants();
@@ -100,10 +109,8 @@ void SBaconPIEGridCell::SetHighlighted(bool bInHighlighted)
 
 void SBaconPIEGridCell::FocusClient()
 {
-	if (SceneViewport.IsValid() && !HasFocusedDescendants())
-	{
-		FocusGameViewport(ViewportWidget.ToSharedRef());
-	}
+	OnSwitchedTo.ExecuteIfBound();
+	FocusViewport();
 }
 
 void SBaconPIEGridCell::Tick(const FGeometry& AllottedGeometry, const double InCurrentTime, const float InDeltaTime)

@@ -9,16 +9,17 @@
 #include "HAL/PlatformApplicationMisc.h"
 #include "IAssetViewport.h"
 #include "ILevelEditor.h"
+#include "Input/Events.h"
+#include "Layout/WidgetPath.h"
 #include "LevelEditor.h"
 #include "Modules/ModuleManager.h"
 #include "PlayInEditorDataTypes.h"
 #include "SBaconPIEGridCell.h"
+#include "SBaconPIEGridPanel.h"
 #include "Settings/LevelEditorPlaySettings.h"
 #include "Styling/AppStyle.h"
 #include "Widgets/Layout/SBorder.h"
-#include "Widgets/Layout/SSpacer.h"
 #include "Widgets/Layout/SSplitter.h"
-#include "Widgets/Layout/SUniformGridPanel.h"
 #include "Widgets/SViewport.h"
 #include "Widgets/SWindow.h"
 #include "Widgets/Text/STextBlock.h"
@@ -43,23 +44,11 @@ namespace BaconPIEGridSessionPrivate
 			: 0.f;
 	}
 
-	FVector2f FitToAspectRatio(const FVector2f& InAvailableSize, float InAspectRatio)
-	{
-		if (InAspectRatio <= 0.f || InAvailableSize.Y <= 0.f)
-		{
-			return InAvailableSize;
-		}
-
-		return InAvailableSize.X / InAvailableSize.Y > InAspectRatio
-			? FVector2f(InAvailableSize.Y * InAspectRatio, InAvailableSize.Y)
-			: FVector2f(InAvailableSize.X, InAvailableSize.X / InAspectRatio);
-	}
-
 	// The window's outer rect, centered in the cell. InFrameSize is its title bar and border, which the aspect ratio leaves out.
 	FSlateRect FitWindowToCell(const FSlateRect& InCellArea, const FVector2f& InFrameSize, float InAspectRatio)
 	{
 		const FVector2f CellSize = InCellArea.GetSize2f();
-		const FVector2f WindowSize = FitToAspectRatio(CellSize - InFrameSize, InAspectRatio) + InFrameSize;
+		const FVector2f WindowSize = FBaconPIEGridLayout::FitToAspectRatio(CellSize - InFrameSize, InAspectRatio) + InFrameSize;
 		return FSlateRect::FromPointAndExtent(InCellArea.GetTopLeft2f() + (CellSize - WindowSize) * 0.5f, WindowSize);
 	}
 
@@ -161,48 +150,6 @@ namespace BaconPIEGridSessionPrivate
 	}
 }
 
-FBaconPIEGridLayout FBaconPIEGridLayout::Make(int32 InNumCells, int32 InPreferredColumns, const FVector2f& InGridSize, float InAspectRatio)
-{
-	const int32 NumCells = FMath::Max(InNumCells, 1);
-
-	FBaconPIEGridLayout Layout;
-	Layout.Columns = InPreferredColumns > 0 ? FMath::Min(InPreferredColumns, NumCells) : FMath::CeilToInt(FMath::Sqrt(static_cast<float>(NumCells)));
-
-	// With a locked ratio, auto columns switch to whichever count gives each client the biggest picture. Near ties keep the near-square grid.
-	if (InPreferredColumns <= 0 && InAspectRatio > 0.f && InGridSize.X > 0.f && InGridSize.Y > 0.f)
-	{
-		const auto GetPictureArea = [&](int32 InColumnCount)
-		{
-			const int32 RowCount = FMath::DivideAndRoundUp(NumCells, InColumnCount);
-			const FVector2f Picture = BaconPIEGridSessionPrivate::FitToAspectRatio(FVector2f(InGridSize.X / InColumnCount, InGridSize.Y / RowCount), InAspectRatio);
-			return Picture.X * Picture.Y;
-		};
-
-		float BestPictureArea = GetPictureArea(Layout.Columns);
-		for (int32 ColumnCount = 1; ColumnCount <= NumCells; ++ColumnCount)
-		{
-			const float PictureArea = GetPictureArea(ColumnCount);
-			if (PictureArea > BestPictureArea * 1.001f)
-			{
-				BestPictureArea = PictureArea;
-				Layout.Columns = ColumnCount;
-			}
-		}
-	}
-
-	Layout.Rows = FMath::DivideAndRoundUp(NumCells, Layout.Columns);
-	return Layout;
-}
-
-FSlateRect FBaconPIEGridLayout::GetCellArea(int32 InCellIndex, const FSlateRect& InGridArea, float InPadding) const
-{
-	const float CellWidth = (InGridArea.Right - InGridArea.Left) / Columns;
-	const float CellHeight = (InGridArea.Bottom - InGridArea.Top) / Rows;
-	const float CellLeft = InGridArea.Left + (InCellIndex % Columns) * CellWidth;
-	const float CellTop = InGridArea.Top + (InCellIndex / Columns) * CellHeight;
-	return FSlateRect(CellLeft + InPadding, CellTop + InPadding, CellLeft + CellWidth - InPadding, CellTop + CellHeight - InPadding);
-}
-
 TSharedPtr<FBaconPIEGridSession> FBaconPIEGridSession::TryStartDocking(const FRequestPlaySessionParams& InParams)
 {
 	const UBaconPIEGridSettings* Settings = GetDefault<UBaconPIEGridSettings>();
@@ -215,7 +162,7 @@ TSharedPtr<FBaconPIEGridSession> FBaconPIEGridSession::TryStartDocking(const FRe
 		return nullptr;
 	}
 
-	const TSharedRef<FBaconPIEGridSession> Session = MakeShareable(new FBaconPIEGridSession(NumClients));
+	const TSharedRef<FBaconPIEGridSession> Session = MakeShareable(new FBaconPIEGridSession(NumClients, Settings->ViewMode));
 	Session->HostViewport = DestinationViewport;
 
 	// A full 1 : 1 dock covers the whole panel area. Anything smaller pushes the neighboring panels aside so nothing is covered.
@@ -266,7 +213,11 @@ TSharedPtr<FBaconPIEGridSession> FBaconPIEGridSession::TryStartDocking(const FRe
 	Session->Switcher = MakeShared<FBaconPIEGridSwitcher>(Settings->SwitchClientChord);
 	FSlateApplication::Get().RegisterInputPreProcessor(Session->Switcher, EInputPreProcessorType::Editor);
 
-	UE_LOG(LogBaconPIEGrid, Log, TEXT("FBaconPIEGridSession::TryStartDocking: docking %d clients in a %dx%d grid"), NumClients, Session->Layout.Columns, Session->Layout.Rows);
+	Session->FocusChangingHandle = FSlateApplication::Get().OnFocusChanging().AddSP(Session, &FBaconPIEGridSession::HandleFocusChanging);
+	Session->PostTickHandle = FSlateApplication::Get().OnPostTick().AddSP(Session, &FBaconPIEGridSession::HandleDockedPostTick);
+
+	const FString LayoutDescription = Session->Layout.IsCarousel() ? FString(TEXT("carousel")) : FString::Printf(TEXT("%dx%d grid"), Session->Layout.Columns, Session->Layout.Rows);
+	UE_LOG(LogBaconPIEGrid, Log, TEXT("FBaconPIEGridSession::TryStartDocking: docking %d clients in a %s"), NumClients, *LayoutDescription);
 	return Session;
 }
 
@@ -275,7 +226,7 @@ TSharedPtr<FBaconPIEGridSession> FBaconPIEGridSession::TryStartTiling(const FReq
 	const UBaconPIEGridSettings* Settings = GetDefault<UBaconPIEGridSettings>();
 	const bool bIsVRPreview = InParams.SessionPreviewTypeOverride.Get(EPlaySessionPreviewType::NoPreview) == EPlaySessionPreviewType::VRPreview;
 	const int32 NumClients = BaconPIEGridSessionPrivate::GetNumClients(InParams);
-	if (!Settings->bTileProcessWindows || NumClients < 2 || InParams.WorldType != EPlaySessionWorldType::PlayInEditor || bIsVRPreview)
+	if (NumClients < 2 || InParams.WorldType != EPlaySessionWorldType::PlayInEditor || bIsVRPreview)
 	{
 		return nullptr;
 	}
@@ -289,7 +240,7 @@ TSharedPtr<FBaconPIEGridSession> FBaconPIEGridSession::TryStartTiling(const FReq
 		return nullptr;
 	}
 
-	const TSharedRef<FBaconPIEGridSession> Session = MakeShareable(new FBaconPIEGridSession(NumClients));
+	const TSharedRef<FBaconPIEGridSession> Session = MakeShareable(new FBaconPIEGridSession(NumClients, EBaconPIEGridViewMode::Grid));
 	Session->HostViewport = GridViewport;
 
 	// Process windows are launched before pushed panels have moved, so they are placed where the grid will end up.
@@ -344,14 +295,16 @@ TSharedPtr<FBaconPIEGridSession> FBaconPIEGridSession::TryStartTiling(const FReq
 
 TSharedRef<IAssetViewport> FBaconPIEGridSession::AddDockedClient(EPlayNetMode InNetMode, int32 InPIEInstanceIndex)
 {
+	const int32 CellIndex = FindFreeCellIndex();
 	const TSharedRef<SBaconPIEGridCell> Cell = SNew(SBaconPIEGridCell, HostViewport.ToSharedRef())
 		.Label(BaconPIEGridSessionPrivate::MakeClientLabel(InNetMode, InPIEInstanceIndex))
 		.ShowLabel(bShowCellLabels)
-		.AspectRatio(AspectRatio);
+		.AspectRatio(AspectRatio)
+		.OnSwitchedTo(this, &FBaconPIEGridSession::HandleCellSwitchedTo, CellIndex);
 
 	DockedCells.Add(Cell);
 	Switcher->AddTarget(Cell);
-	SetCellContent(FindFreeCellIndex(), Cell);
+	SetCellContent(CellIndex, Cell);
 	return Cell;
 }
 
@@ -380,7 +333,7 @@ bool FBaconPIEGridSession::AddProcessClient(int32 InPIEInstanceIndex, EPlayNetMo
 		SetCellContent(CellIndex, BaconPIEGridSessionPrivate::MakeProcessPlaceholder(Label));
 	}
 
-	if (!bTileProcessWindows || !HasGridArea())
+	if (!HasGridArea())
 	{
 		return false;
 	}
@@ -404,7 +357,7 @@ bool FBaconPIEGridSession::AddProcessClient(int32 InPIEInstanceIndex, EPlayNetMo
 
 void FBaconPIEGridSession::FocusFirstClient() const
 {
-	if (DockedCells.Num() > 0)
+	if (bHoldFirstClientFocus && DockedCells.Num() > 0)
 	{
 		DockedCells[0]->RegisterGameViewportIfPIE();
 	}
@@ -415,6 +368,7 @@ void FBaconPIEGridSession::End()
 	if (FSlateApplication::IsInitialized())
 	{
 		FSlateApplication::Get().OnPostTick().Remove(PostTickHandle);
+		FSlateApplication::Get().OnFocusChanging().Remove(FocusChangingHandle);
 		if (Switcher.IsValid())
 		{
 			FSlateApplication::Get().UnregisterInputPreProcessor(Switcher);
@@ -422,6 +376,7 @@ void FBaconPIEGridSession::End()
 	}
 
 	PostTickHandle.Reset();
+	FocusChangingHandle.Reset();
 
 	for (const TSharedRef<FBaconPIEGridUndockedTarget>& UndockedTarget : UndockedTargets)
 	{
@@ -457,14 +412,15 @@ void FBaconPIEGridSession::End()
 	}
 }
 
-FBaconPIEGridSession::FBaconPIEGridSession(int32 InNumCells)
+FBaconPIEGridSession::FBaconPIEGridSession(int32 InNumCells, EBaconPIEGridViewMode InViewMode)
+	: ViewMode(InViewMode)
 {
 	const UBaconPIEGridSettings* Settings = GetDefault<UBaconPIEGridSettings>();
 	PreferredColumns = Settings->Columns;
+	CarouselHeightRatio = Settings->CarouselHeightRatio;
 	CellPadding = Settings->CellPadding;
 	AspectRatio = BaconPIEGridSessionPrivate::GetAspectRatio(*Settings);
 	bShowCellLabels = Settings->bShowCellLabels;
-	bTileProcessWindows = Settings->bTileProcessWindows;
 
 	EnsureCellCount(InNumCells);
 }
@@ -606,7 +562,7 @@ FMargin FBaconPIEGridSession::GetHostViewportPadding() const
 	// Slate units of the viewport's last layout, letterboxed like the windows when the aspect ratio is locked.
 	const FVector2f ViewportSize = ViewportWidget->GetTickSpaceGeometry().GetLocalSize();
 	const FSlateRect CellArea = Layout.GetCellArea(0, FSlateRect(FVector2f::ZeroVector, ViewportSize), CellPadding);
-	const FVector2f PictureSize = BaconPIEGridSessionPrivate::FitToAspectRatio(CellArea.GetSize2f(), AspectRatio);
+	const FVector2f PictureSize = FBaconPIEGridLayout::FitToAspectRatio(CellArea.GetSize2f(), AspectRatio);
 	const FVector2f PictureTopLeft = CellArea.GetTopLeft2f() + (CellArea.GetSize2f() - PictureSize) * 0.5f;
 	const FVector2f PictureBottomRight = PictureTopLeft + PictureSize;
 
@@ -615,6 +571,55 @@ FMargin FBaconPIEGridSession::GetHostViewportPadding() const
 		FMath::Max(PictureTopLeft.Y, 0.f),
 		FMath::Max(ViewportSize.X - PictureBottomRight.X, 0.f),
 		FMath::Max(ViewportSize.Y - PictureBottomRight.Y, 0.f));
+}
+
+void FBaconPIEGridSession::HandleCellSwitchedTo(int32 InCellIndex)
+{
+	// Process windows can't follow the carousel, but they never have to: a session with client processes docks only its
+	// first client, so the switcher has no other client to bring in.
+	if (ViewMode == EBaconPIEGridViewMode::Carousel)
+	{
+		MainCellIndex = InCellIndex;
+		UpdateLayout();
+	}
+}
+
+void FBaconPIEGridSession::HandleFocusChanging(const FFocusEvent& InFocusEvent, const FWeakWidgetPath& InOldFocusPath, const TSharedPtr<SWidget>& InOldFocusedWidget, const FWidgetPath& InNewFocusPath, const TSharedPtr<SWidget>& InNewFocusedWidget)
+{
+	if (!bHoldFirstClientFocus || InFocusEvent.GetUser() != FSlateApplication::Get().GetUserIndexForKeyboard())
+	{
+		return;
+	}
+
+	const bool bFocusesOtherClient = DockedCells.ContainsByPredicate([this, &InNewFocusPath](const TSharedPtr<SBaconPIEGridCell>& Cell)
+	{
+		return Cell != DockedCells[0] && InNewFocusPath.ContainsWidget(Cell.Get());
+	});
+	if (!bFocusesOtherClient)
+	{
+		return;
+	}
+
+	// Clicks and the switcher focus by mouse. Anything else is engine or game code, and since the focus change can't be
+	// undone from inside this event, the first client takes it back after the tick.
+	if (InFocusEvent.GetCause() == EFocusCause::Mouse)
+	{
+		bHoldFirstClientFocus = false;
+		bRefocusFirstClient = false;
+	}
+	else
+	{
+		bRefocusFirstClient = true;
+	}
+}
+
+void FBaconPIEGridSession::HandleDockedPostTick(float InDeltaTime)
+{
+	if (bRefocusFirstClient)
+	{
+		bRefocusFirstClient = false;
+		DockedCells[0]->FocusViewport();
+	}
 }
 
 void FBaconPIEGridSession::HandlePostTick(float InDeltaTime)
@@ -667,7 +672,14 @@ bool FBaconPIEGridSession::HasGridArea() const
 void FBaconPIEGridSession::UpdateLayout()
 {
 	const FVector2f GridSize(FMath::Max(GridArea.Right - GridArea.Left, 0.f), FMath::Max(GridArea.Bottom - GridArea.Top, 0.f));
-	Layout = FBaconPIEGridLayout::Make(CellContents.Num(), PreferredColumns, GridSize, AspectRatio);
+	Layout = ViewMode == EBaconPIEGridViewMode::Carousel
+		? FBaconPIEGridLayout::MakeCarousel(CellContents.Num(), MainCellIndex, CarouselHeightRatio, AspectRatio)
+		: FBaconPIEGridLayout::MakeGrid(CellContents.Num(), PreferredColumns, GridSize, AspectRatio);
+
+	if (GridPanel.IsValid())
+	{
+		GridPanel->SetLayout(Layout);
+	}
 }
 
 void FBaconPIEGridSession::BuildGrid()
@@ -681,37 +693,24 @@ void FBaconPIEGridSession::BuildGrid()
 		.OnMouseButtonDown_Lambda([](const FGeometry&, const FPointerEvent&) { return FReply::Handled(); })
 		.OnMouseDoubleClick_Lambda([](const FGeometry&, const FPointerEvent&) { return FReply::Handled(); })
 		[
-			SAssignNew(GridPanel, SUniformGridPanel)
-			.SlotPadding(FMargin(CellPadding))
+			SAssignNew(GridPanel, SBaconPIEGridPanel)
+			.Layout(Layout)
+			.CellPadding(CellPadding)
 		];
-
-	RebuildGrid();
-}
-
-void FBaconPIEGridSession::RebuildGrid()
-{
-	if (!GridPanel.IsValid())
-	{
-		return;
-	}
-
-	GridPanel->ClearChildren();
-	for (int32 CellIndex = 0; CellIndex < CellContents.Num(); ++CellIndex)
-	{
-		// Empty cells still get a slot, otherwise the panel shrinks its column/row count until every client has arrived.
-		const TSharedRef<SWidget> Content = CellContents[CellIndex].IsValid() ? CellContents[CellIndex].ToSharedRef() : TSharedRef<SWidget>(SNew(SSpacer));
-		GridPanel->AddSlot(CellIndex % Layout.Columns, CellIndex / Layout.Columns)
-		[
-			Content
-		];
-	}
 }
 
 void FBaconPIEGridSession::SetCellContent(int32 InCellIndex, const TSharedRef<SWidget>& InContent)
 {
 	EnsureCellCount(InCellIndex + 1);
 	CellContents[InCellIndex] = InContent;
-	RebuildGrid();
+
+	if (GridPanel.IsValid())
+	{
+		GridPanel->AddSlot(InCellIndex)
+		[
+			InContent
+		];
+	}
 }
 
 void FBaconPIEGridSession::EnsureCellCount(int32 InNumCells)
