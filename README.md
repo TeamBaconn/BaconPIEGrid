@@ -6,11 +6,11 @@ Unreal Engine editor plugin that docks multiplayer PIE clients over the play vie
 
 **Grid view:** every client gets an equal cell.
 
-![Grid view](Docs/grid.gif)
+<img src="Docs/grid.gif" alt="Grid view" width="100%">
 
 **Carousel view:** one client fills the main view, and Ctrl+Tab brings the next one in.
 
-![Carousel view](Docs/carousel.gif)
+<img src="Docs/carousel.gif" alt="Carousel view" width="100%">
 
 ## Features
 
