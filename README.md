@@ -1,16 +1,14 @@
 # Bacon PIE Grid
 
-Unreal Engine editor plugin that docks multiplayer PIE clients over the play viewport, either as an even grid or as a carousel with one main view and smaller views below it. Clients that open in their own windows are tiled onto the same grid, and you can switch between clients with Ctrl+Tab.
-
-## Preview
+<img src="Docs/grid.gif" alt="Grid view" width="100%">
 
 **Grid view:** every client gets an equal cell.
 
-<img src="Docs/grid.gif" alt="Grid view" width="100%">
+<img src="Docs/carousel.gif" alt="Carousel view" width="100%">
 
 **Carousel view:** one client fills the main view, and Ctrl+Tab brings the next one in.
 
-<img src="Docs/carousel.gif" alt="Carousel view" width="100%">
+Unreal Engine 5.5 editor plugin that docks multiplayer PIE clients over the play viewport, either as an even grid or as a carousel with one main view and smaller views below it. Clients that open in their own windows are tiled onto the same grid, and you can switch between clients with Ctrl+Tab.
 
 ## Features
 
@@ -24,27 +22,12 @@ Unreal Engine editor plugin that docks multiplayer PIE clients over the play vie
 - Client switcher: hold Ctrl and tap Tab to move the highlight, then release Ctrl to switch. Shift goes backwards and Escape cancels. In the carousel, the client you switch to moves into the main view.
 - Docked play starts with focus on the first client, usually the server. It keeps focus until you switch to another client, even when the other clients' game code takes focus as they spawn.
 
-## Requirements
-
-- Unreal Engine 5.5 (other versions untested).
-- A C++ project, since the plugin ships as source.
-
-It's an editor-only module, so nothing ends up in packaged builds. Developed on Windows with a UE 5.5 source build.
-
 ## Installation
 
 1. Clone or copy this repository into your project as `Plugins/BaconPIEGrid`.
 2. Regenerate project files and build the editor.
 
 The plugin hooks into PIE through its own editor engine class. Its `Config/Engine.ini` sets `UnrealEdEngine` while the plugin is enabled, so there's nothing to add to your project's config, and disabling the plugin puts the default editor engine back. Only one editor engine class can be active, so it can't be combined with another plugin or project that sets its own `UnrealEdEngine`.
-
-## Usage
-
-1. In the play options next to the Play button, set Multiplayer Options > Number of Players to 2 or more.
-2. Pick Grid or Carousel under Editor Preferences > Level Editor > PIE Grid > View Mode.
-3. Play in "Selected Viewport". The clients dock over the play viewport.
-4. With Run Under One Process off, or with Standalone Game, the client windows are placed on the grid cells instead.
-5. While one of the clients has focus, press Ctrl+Tab to switch between them.
 
 ## Settings
 
