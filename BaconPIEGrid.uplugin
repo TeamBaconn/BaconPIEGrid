@@ -1,0 +1,23 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "1.0",
+	"FriendlyName": "Bacon PIE Grid",
+	"Description": "Docks multi-client Play In Editor sessions into a grid over the play viewport",
+	"Category": "Editor",
+	"CreatedBy": "Team Bacon",
+	"CreatedByURL": "https://bacongamedev.com/",
+	"DocsURL": "",
+	"MarketplaceURL": "",
+	"CanContainContent": false,
+	"IsBetaVersion": false,
+	"IsExperimentalVersion": false,
+	"Installed": false,
+	"Modules": [
+		{
+			"Name": "BaconPIEGrid",
+			"Type": "Editor",
+			"LoadingPhase": "Default"
+		}
+	]
+}
