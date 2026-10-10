@@ -2,11 +2,7 @@
 
 <img src="Docs/grid.gif" alt="Grid view" width="100%">
 
-**Grid view:** every client gets an equal cell.
-
 <img src="Docs/carousel.gif" alt="Carousel view" width="100%">
-
-**Carousel view:** one client fills the main view, and Ctrl+Tab brings the next one in.
 
 Unreal Engine 5.5 editor plugin that docks multiplayer PIE clients over the play viewport, either as an even grid or as a carousel with one main view and smaller views below it. Clients that open in their own windows are tiled onto the same grid, and you can switch between clients with Ctrl+Tab.
 
